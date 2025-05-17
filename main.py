@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from time import sleep
 from bs4 import BeautifulSoup
 from requests import post
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QSlider
 from PyQt6 import uic
 import sys
 from threading import Thread, Event
@@ -50,7 +50,7 @@ def get_bpm(title: str, artists: list[str] = []):
         
         raise ValueError('Failed to find bpm!')
 
-    return SongInfo(foundArtist, foundTitle, bpm)
+    return SongInfo(foundArtist, foundTitle, int(bpm))
 
 def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
     load_dotenv()
@@ -65,22 +65,45 @@ def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
     while not runningEvent.is_set():
         song = sp.current_playback()
         
-        if current_id is None or song["item"]["id"] != current_id:
-            current_id = song["item"]["id"]
-            name = song["item"]["name"]
-            artists = [ s['name'] for s in song['item']['artists'] ]
-            window.spotifySong.setText(f"{name} by {artists[0]}")
-            
-            print(f"Change detected: {name}")
-            try:
-                info = get_bpm(name, artists)
-                window.bpmpSong.setText(f"{info.track} by {info.artist}")
+        try:
+            if current_id is None or song["item"]["id"] != current_id:
+                current_id = song["item"]["id"]
+                name = song["item"]["name"]
+                artists = [ s['name'] for s in song['item']['artists'] ]
+                window.reset(window.spotifySong)
+                window.spotifySong.setText(f"{name} by {artists[0]}")
+                
+                window.waiting(window.bpmpSong)
+                window.waiting(window.bpm)
+                print(f"Change detected: {name}")
+                try:
+                    info = get_bpm(name, artists)
+                    
+                    window.reset(window.bpm)
+                    
+                    window.dmxStrobe.setStyleSheet(window.dmxStrobe.styleSheet() + 'color: cyan;')
+                    
+                    window.reset(window.bpmpSong)
+                    window.bpmpSong.setText(f"{info.track} by {info.artist}")
 
-                window.bpm.setText(info.bpm)
-                window.bpm.setStyleSheet(window.bpm.styleSheet() + "color: green;")
-                print(f"From bpm-provider: {info}")
-            except ValueError:
-                print("No bpm found!")
+                    window.bpm.setText(str(info.bpm))
+                    window.bpm.setStyleSheet(window.bpm.styleSheet() + "color: magenta;")
+                    print(f"From bpm-provider: {info}")
+                    
+                    hz = info.bpm / 60
+                    dmx = round(((hz - 1) / 19) * 254 + 1)
+                    
+                    window.dmxStrobe.setStyleSheet(window.dmxStrobe.styleSheet() + "color: cyan;")
+                    window.dmxStrobe.setText(str(dmx))
+                    
+                    window.dmxStrobeSlider.setValue(round(dmx / 255 * 100))
+                except ValueError:
+                    window.na(window.bpm)
+                    
+                    print("No bpm found!")
+        except Exception as e:
+            print(e)
+            window.na_all()
         
         sleep(1)    
 
@@ -100,7 +123,13 @@ class MainWindow(QMainWindow):
         self.waiting(self.bpmpSong)
         
         self.bpm = self.findChild(QLabel, 'bpm')
-        self.waiting(self.bpm, True)
+        self.waiting(self.bpm)
+        
+        self.dmxStrobe = self.findChild(QLabel, 'dmxStrobe')
+        self.waiting(self.dmxStrobe)
+        
+        self.dmxStrobeSlider = self.findChild(QSlider, 'dmxStrobeSlider')
+        self.dmxStrobeSlider.setValue(0)
         
         self.running_event = Event()
         self.spotify_scanner = Thread(target=start_spotify_scanning, args=[self, self.running_event])
@@ -113,9 +142,19 @@ class MainWindow(QMainWindow):
         self.running_event.set()
         self.spotify_scanner.join()
     
-    def waiting(self, widget: QLabel, bold: bool = False):
+    def waiting(self, widget: QLabel):
         widget.setText('Waiting...')
         widget.setStyleSheet(widget.styleSheet() + "color: yellow;")
+    
+    def na_all(self):
+        self.na(self.spotifySong)
+        self.na(self.bpmpSong)
+        self.na(self.bpm)
+        self.na(self.dmxStrobe)
+        self.dmxStrobeSlider.setValue(0)
+    
+    def reset(self, widget: QLabel):
+        widget.setStyleSheet(widget.styleSheet() + "color: #d9d9d9;")
     
     def na(self, widget: QLabel):
         widget.setText('N/A')
