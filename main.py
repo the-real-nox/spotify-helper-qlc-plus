@@ -73,8 +73,12 @@ def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
                 window.reset(window.spotifySong)
                 window.spotifySong.setText(f"{name} by {artists[0]}")
                 
+                window.status.setText('')
+                
                 window.waiting(window.bpmpSong)
                 window.waiting(window.bpm)
+                window.waiting(window.dmxStrobe)
+                window.dmxStrobeSlider.setValue(0)
                 print(f"Change detected: {name}")
                 try:
                     info = get_bpm(name, artists)
@@ -91,7 +95,7 @@ def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
                     print(f"From bpm-provider: {info}")
                     
                     hz = info.bpm / 60
-                    dmx = round(((hz - 1) / 19) * 254 + 1)
+                    dmx = round(hz * 12.75)
                     
                     window.dmxStrobe.setStyleSheet(window.dmxStrobe.styleSheet() + "color: cyan;")
                     window.dmxStrobe.setText(str(dmx))
@@ -99,10 +103,14 @@ def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
                     window.dmxStrobeSlider.setValue(round(dmx / 255 * 100))
                 except ValueError:
                     window.na(window.bpm)
-                    
-                    print("No bpm found!")
+                    window.na(window.bpmpSong)
+                    window.na(window.dmxStrobe)
+                    window.dmxStrobeSlider.setValue(0)
+                    window.status.setStyleSheet('color: red; font-weight: bold;')
+                    window.status.setText('No bpm found')
         except Exception as e:
-            print(e)
+            window.status.setText(str(e))
+            window.status.setStyleSheet('color: white; background-color: red; font-weight: bold;')
             window.na_all()
         
         sleep(1)    
@@ -131,6 +139,8 @@ class MainWindow(QMainWindow):
         self.dmxStrobeSlider = self.findChild(QSlider, 'dmxStrobeSlider')
         self.dmxStrobeSlider.setValue(0)
         
+        self.status = self.findChild(QLabel, 'status')
+        
         self.running_event = Event()
         self.spotify_scanner = Thread(target=start_spotify_scanning, args=[self, self.running_event])
         self.spotify_scanner.start()
@@ -157,8 +167,8 @@ class MainWindow(QMainWindow):
         widget.setStyleSheet(widget.styleSheet() + "color: #d9d9d9;")
     
     def na(self, widget: QLabel):
-        widget.setText('N/A')
         widget.setStyleSheet("color: red;")
+        widget.setText('N/A')
 
 if __name__ == '__main__' :
     app = QApplication(sys.argv)
