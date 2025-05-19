@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QSlider
 from PyQt6 import uic
 import sys
 from threading import Thread, Event
-
+from os import getcwd
+from os.path import join
 
 @dataclass
 class SongInfo:
@@ -53,7 +54,7 @@ def get_bpm(title: str, artists: list[str] = []):
     return SongInfo(foundArtist, foundTitle, int(bpm))
 
 def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
-    load_dotenv()
+    load_dotenv(join(getcwd(), '.env'))
     sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
         redirect_uri="http://127.0.0.1:9999/spotipy",
         scope="user-read-playback-state user-read-currently-playing"
@@ -64,8 +65,9 @@ def start_spotify_scanning(window: QMainWindow, runningEvent: Event):
     
     while not runningEvent.is_set():
         song = sp.current_playback()
-        
         try:
+            if song == None:
+                raise ValueError('No song playing!')
             if current_id is None or song["item"]["id"] != current_id:
                 current_id = song["item"]["id"]
                 name = song["item"]["name"]
@@ -144,7 +146,6 @@ class MainWindow(QMainWindow):
         self.running_event = Event()
         self.spotify_scanner = Thread(target=start_spotify_scanning, args=[self, self.running_event])
         self.spotify_scanner.start()
-        
         
         QApplication.instance().aboutToQuit.connect(self.stop_spotify_scanning)
     
